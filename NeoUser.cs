@@ -37,7 +37,7 @@
         public virtual List<NeoUserClaim> Claims { get; private set; }
 
         /// <summary>
-        /// Unique key for the user
+        /// Unique key for the user.
         /// </summary>
         public virtual string Id { get; set; }
 
@@ -77,13 +77,19 @@
         public virtual string Phone { get; set; }
 
         /// <summary>
-        /// Gets or sets the user's first name.
+        /// Gets or sets a value indicating whether this user's phone number is confirmed.
         /// </summary>
-        public virtual string FirstName { get; set; }
+        /// <value>
+        /// <c>true</c> if phone confirmed; otherwise, <c>false</c>.
+        /// </value>
+        public virtual bool IsPhoneConfirmed { get; set; }
 
         /// <summary>
-        /// Gets or sets the user's last name.
+        /// Gets or sets a value indicating whether this user's email is confirmed.
         /// </summary>
-        public virtual string LastName { get; set; }
+        /// <value>
+        /// <c>true</c> if email confirmed; otherwise, <c>false</c>.
+        /// </value>
+        public virtual bool IsEmailConfirmed { get; set; }
     }
 }

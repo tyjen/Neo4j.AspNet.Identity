@@ -13,7 +13,7 @@
     /// User store for ASP.NET identity backed by Neo4j.
     /// </summary>
     /// <typeparam name="TUser">The type of the user.</typeparam>
-    public class NeoUserStore<TUser> : IUserLoginStore<TUser>, IUserClaimStore<TUser>, IUserRoleStore<TUser>, IUserPasswordStore<TUser>, IUserSecurityStampStore<TUser>
+    public class NeoUserStore<TUser> : IUserStore<TUser>, IUserLoginStore<TUser>, IUserClaimStore<TUser>, IUserRoleStore<TUser>, IUserPasswordStore<TUser>, IUserSecurityStampStore<TUser>, IUserPhoneNumberStore<TUser>, IUserEmailStore<TUser>
         where TUser : NeoUser
     {
         /// <summary>
@@ -32,39 +32,9 @@
         private readonly IGraphClient graphClient;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="NeoUserStore{TUser}"/> class.
+        /// Helper object for interacting with Neo4j.
         /// </summary>
-        public NeoUserStore()
-            : this("DefaultConnection")
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="NeoUserStore{TUser}"/> class.
-        /// </summary>
-        /// <param name="connectionString">The connection string.</param>
-        /// <param name="username">The database username.</param>
-        /// <param name="password">The database password.</param>
-        public NeoUserStore(string connectionString, string username = null, string password = null)
-        {
-            if (string.IsNullOrWhiteSpace(connectionString)) throw new ArgumentNullException(nameof(connectionString));
-
-            if (!connectionString.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-            {
-                connectionString = ConfigurationManager.ConnectionStrings[connectionString].ConnectionString;
-            }
-
-            if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
-            {
-                this.graphClient = new GraphClient(new Uri(connectionString), username, password);
-            }
-            else
-            {
-                this.graphClient = new GraphClient(new Uri(connectionString));
-            }
-
-            this.graphClient.Connect();
-        }
+        private readonly Neo4jHelper neoHelper;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="NeoUserStore{TUser}"/> class.
@@ -75,7 +45,7 @@
             if (neo4JClient == null) throw new ArgumentNullException(nameof(neo4JClient));
 
             this.graphClient = neo4JClient;
-            this.graphClient.Connect();
+            this.neoHelper = new Neo4jHelper(this.graphClient, NeoUserStore<TUser>.UserNodeLabel);
         }
 
         /// <inheritdoc />
@@ -116,12 +86,18 @@
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
+            if (string.IsNullOrWhiteSpace(user.Id))
+            {
+                // If a user id is not specified, generate a new one.
+                user.Id = Guid.NewGuid().ToString("N");
+            }
+
             return
                 this.graphClient.Cypher
                     .Merge("(user:" + NeoUserStore<TUser>.UserNodeLabel + " { Id: {id} })")
                     .OnCreate()
                     .Set("user = {newUser}")
-                    .WithParams(new { id = user.Id, user })
+                    .WithParams(new { id = user.Id, newUser = user })
                     .ExecuteWithoutResultsAsync();
         }
 
@@ -130,11 +106,7 @@
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
-            return this.graphClient.Cypher
-                .Match(NeoUserStore<TUser>.UserNodeMatch)
-                .Where((TUser u) => u.Id == user.Id)
-                .Delete("u")
-                .ExecuteWithoutResultsAsync();
+            return this.neoHelper.DeleteByIdAsync(user.Id);
         }
 
         /// <summary>
@@ -152,7 +124,7 @@
                 await
                 this.graphClient.Cypher
                     .Match(NeoUserStore<TUser>.UserNodeMatch)
-                    .Where($"Logins.LoginProvider = '{login.LoginProvider}', Logins.ProviderKey = '{login.ProviderKey}'")
+                    .Where($"u.Logins.LoginProvider = '{login.LoginProvider}', u.Logins.ProviderKey = '{login.ProviderKey}'")
                     .Return(u => u.As<TUser>())
                     .ResultsAsync;
 
@@ -160,34 +132,19 @@
         }
 
         /// <inheritdoc />
-        public async Task<TUser> FindByIdAsync(string userId)
+        public Task<TUser> FindByIdAsync(string userId)
         {
             if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentNullException(nameof(userId));
 
-            IEnumerable<TUser> userResults =
-                await this.graphClient.Cypher
-                    .Match(NeoUserStore<TUser>.UserNodeMatch)
-                    .Where((TUser u) => u.Id == userId)
-                    .Return(u => u.As<TUser>())
-                    .ResultsAsync;
-
-            return userResults.FirstOrDefault();
+            return this.neoHelper.FindOneByIdAsync<TUser>(userId);
         }
 
         /// <inheritdoc />
-        public async Task<TUser> FindByNameAsync(string userName)
+        public Task<TUser> FindByNameAsync(string userName)
         {
             if (string.IsNullOrWhiteSpace(userName)) throw new ArgumentNullException(nameof(userName));
 
-            IEnumerable<TUser> userResults =
-                await
-                this.graphClient.Cypher
-                    .Match(NeoUserStore<TUser>.UserNodeMatch)
-                    .Where((TUser u) => u.UserName == userName)
-                    .Return(u => u.As<TUser>())
-                    .ResultsAsync;
-
-            return userResults.FirstOrDefault();
+            return this.neoHelper.FindOneByPropertyAsync<TUser>("UserName", userName);
         }
 
         /// <inheritdoc />
@@ -307,6 +264,116 @@
                 .ExecuteWithoutResults();
 
             return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Set the user's phone number
+        /// </summary>
+        /// <param name="user"/><param name="phoneNumber"/>
+        /// <returns/>
+        public Task SetPhoneNumberAsync(TUser user, string phoneNumber)
+        {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            user.Phone = phoneNumber;
+            return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Get the user phone number
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<string> GetPhoneNumberAsync(TUser user)
+        {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            return Task.FromResult(user.Phone);
+        }
+
+        /// <summary>
+        /// Returns true if the user phone number is confirmed
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<bool> GetPhoneNumberConfirmedAsync(TUser user)
+        {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            return Task.FromResult(user.IsPhoneConfirmed);
+        }
+
+        /// <summary>
+        /// Sets whether the user phone number is confirmed
+        /// </summary>
+        /// <param name="user"/><param name="confirmed"/>
+        /// <returns/>
+        public Task SetPhoneNumberConfirmedAsync(TUser user, bool confirmed)
+        {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            user.IsPhoneConfirmed = confirmed;
+            return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Set the user email
+        /// </summary>
+        /// <param name="user"/><param name="email"/>
+        /// <returns/>
+        public Task SetEmailAsync(TUser user, string email)
+        {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            user.Email = email;
+            return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Get the user email
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<string> GetEmailAsync(TUser user)
+        {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            return Task.FromResult(user.Email);
+        }
+
+        /// <summary>
+        /// Returns true if the user email is confirmed
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<bool> GetEmailConfirmedAsync(TUser user)
+        {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            return Task.FromResult(user.IsEmailConfirmed);
+        }
+
+        /// <summary>
+        /// Sets whether the user email is confirmed
+        /// </summary>
+        /// <param name="user"/><param name="confirmed"/>
+        /// <returns/>
+        public Task SetEmailConfirmedAsync(TUser user, bool confirmed)
+        {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            user.IsEmailConfirmed = confirmed;
+            return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Returns the user associated with this email
+        /// </summary>
+        /// <param name="email"/>
+        /// <returns/>
+        public Task<TUser> FindByEmailAsync(string email)
+        {
+            return this.neoHelper.FindOneByPropertyAsync<TUser>("Email", email);
         }
     }
 }
