@@ -140,6 +140,7 @@ packages/
 
 # NuGet exe is downloaded by build
 NuGet.exe
+*.nupkg
 
 # Windows Azure Build Output
 csx/
