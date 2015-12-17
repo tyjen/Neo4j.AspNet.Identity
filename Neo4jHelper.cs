@@ -2,13 +2,10 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using System.Threading.Tasks;
     using Neo4jClient;
-    using System.Linq;
 
-    /// <summary>
-    /// Helper class for <see cref="IGraphClient"/>.
-    /// </summary>
     internal class Neo4jHelper
     {
         /// <summary>
@@ -44,7 +41,7 @@
 
             return this.graphClient.Cypher
                .Match("(x:" + this.nodeType + ")")
-               .Where($"Id = '{id}'")
+               .Where($"x.Id = '{id}'")
                .Delete("x")
                .ExecuteWithoutResultsAsync();
         }
@@ -58,7 +55,7 @@
 
             return this.graphClient.Cypher
                     .Match("(x:" + this.nodeType + ")")
-                    .Where($"Id = '{id}'")
+                    .Where($"x.Id = '{id}'")
                     .Return(x => x.As<TNode>())
                     .ResultsAsync;
         }
@@ -71,7 +68,7 @@
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentNullException(nameof(id));
 
             IEnumerable<TNode> results = await this.FindByIdAsync<TNode>(id);
-            return results != null ? results.First() : default(TNode);
+            return results.FirstOrDefault();
         }
 
         /// <summary>
@@ -83,7 +80,7 @@
 
             return this.graphClient.Cypher
                     .Match("(x:" + this.nodeType + ")")
-                    .Where($"{propertyName} = '{value}'")
+                    .Where($"x.{propertyName} = '{value}'")
                     .Return(x => x.As<TNode>())
                     .ResultsAsync;
         }
@@ -96,7 +93,7 @@
             if (string.IsNullOrWhiteSpace(propertyName)) throw new ArgumentNullException(nameof(propertyName));
 
             IEnumerable<TNode> results = await this.FindByPropertyAsync<TNode>(propertyName, value);
-            return results != null ? results.First() : default(TNode);
+            return results.FirstOrDefault();
         }
     }
 }
