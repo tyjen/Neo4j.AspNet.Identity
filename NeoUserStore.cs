@@ -13,7 +13,7 @@
     /// User store for ASP.NET identity backed by Neo4j.
     /// </summary>
     /// <typeparam name="TUser">The type of the user.</typeparam>
-    public class NeoUserStore<TUser> : IUserStore<TUser>, IUserLoginStore<TUser>, IUserClaimStore<TUser>, IUserRoleStore<TUser>, IUserPasswordStore<TUser>, IUserSecurityStampStore<TUser>, IUserPhoneNumberStore<TUser>, IUserEmailStore<TUser>
+    public class NeoUserStore<TUser> : IUserStore<TUser>, IUserLoginStore<TUser>, IUserClaimStore<TUser>, IUserRoleStore<TUser>, IUserPasswordStore<TUser>, IUserSecurityStampStore<TUser>, IUserPhoneNumberStore<TUser>, IUserEmailStore<TUser>, IUserLockoutStore<TUser, string>, IUserTwoFactorStore<TUser, string>
         where TUser : NeoUser
     {
         /// <summary>
@@ -124,7 +124,7 @@
                 await
                 this.graphClient.Cypher
                     .Match(NeoUserStore<TUser>.UserNodeMatch)
-                    .Where($"u.Logins.LoginProvider = '{login.LoginProvider}', u.Logins.ProviderKey = '{login.ProviderKey}'")
+                    .Where($"u.logins.LoginProvider = '{login.LoginProvider}', u.logins.ProviderKey = '{login.ProviderKey}'")
                     .Return(u => u.As<TUser>())
                     .ResultsAsync;
 
@@ -144,7 +144,7 @@
         {
             if (string.IsNullOrWhiteSpace(userName)) throw new ArgumentNullException(nameof(userName));
 
-            return this.neoHelper.FindOneByPropertyAsync<TUser>("UserName", userName);
+            return this.neoHelper.FindOneByPropertyAsync<TUser>("username", userName);
         }
 
         /// <inheritdoc />
@@ -259,7 +259,7 @@
             this.graphClient.Cypher
                 .Match(NeoUserStore<TUser>.UserNodeMatch)
                 .Where((TUser u) => u.Id == user.Id)
-                .Set("user = {updatedUser}")
+                .Set("u = {updatedUser}")
                 .WithParam("updatedUser", user)
                 .ExecuteWithoutResults();
 
@@ -275,7 +275,7 @@
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
-            user.Phone = phoneNumber;
+            user.PhoneNumber = phoneNumber;
             return Task.FromResult(user);
         }
 
@@ -288,7 +288,7 @@
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
-            return Task.FromResult(user.Phone);
+            return Task.FromResult(user.PhoneNumber);
         }
 
         /// <summary>
@@ -373,7 +373,128 @@
         /// <returns/>
         public Task<TUser> FindByEmailAsync(string email)
         {
-            return this.neoHelper.FindOneByPropertyAsync<TUser>("Email", email);
+            return this.neoHelper.FindOneByPropertyAsync<TUser>("email", email);
+        }
+
+        /// <summary>
+        /// Returns the DateTimeOffset that represents the end of a user's lockout, any time in the past should be considered
+        ///                 not locked out.
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<DateTimeOffset> GetLockoutEndDateAsync(TUser user)
+        {
+            return Task.FromResult(user.LockoutEndDate.GetValueOrDefault());
+        }
+
+        /// <summary>
+        /// Locks a user out until the specified end date (set to a past date, to unlock a user)
+        /// </summary>
+        /// <param name="user"/><param name="lockoutEnd"/>
+        /// <returns/>
+        public Task SetLockoutEndDateAsync(TUser user, DateTimeOffset lockoutEnd)
+        {
+            user.LockoutEndDate = lockoutEnd;
+            return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Used to record when an attempt to access the user has failed
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<int> IncrementAccessFailedCountAsync(TUser user)
+        {
+            if (user.LoginAttempts.HasValue)
+            {
+                user.LoginAttempts++;
+            }
+            else
+            {
+                user.LoginAttempts = 1;
+            }
+
+            return Task.FromResult(user.LoginAttempts.Value);
+        }
+
+        /// <summary>
+        /// Used to reset the access failed count, typically after the account is successfully accessed
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task ResetAccessFailedCountAsync(TUser user)
+        {
+            user.LoginAttempts = null;
+            return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Returns the current number of failed access attempts.  This number usually will be reset whenever the password is
+        ///                 verified or the account is locked out.
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<int> GetAccessFailedCountAsync(TUser user)
+        {
+            return Task.FromResult(user.LoginAttempts.GetValueOrDefault(0));
+        }
+
+        /// <summary>
+        /// Returns whether the user can be locked out.
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<bool> GetLockoutEnabledAsync(TUser user)
+        {
+            return Task.FromResult(user.IsLockoutEnabled.HasValue && user.IsLockoutEnabled.Value);
+        }
+
+        /// <summary>
+        /// Sets whether the user can be locked out.
+        /// </summary>
+        /// <param name="user"/><param name="enabled"/>
+        /// <returns/>
+        public Task SetLockoutEnabledAsync(TUser user, bool enabled)
+        {
+            if (enabled)
+            {
+                user.IsLockoutEnabled = true;
+            }
+            else
+            {
+                user.IsLockoutEnabled = null;
+            }
+
+            return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Sets whether two factor authentication is enabled for the user
+        /// </summary>
+        /// <param name="user"/><param name="enabled"/>
+        /// <returns/>
+        public Task SetTwoFactorEnabledAsync(TUser user, bool enabled)
+        {
+            if (enabled)
+            {
+                user.IsTwoFactorAuthEnabled = true;
+            }
+            else
+            {
+                user.IsTwoFactorAuthEnabled = null;
+            }
+
+            return Task.FromResult(user);
+        }
+
+        /// <summary>
+        /// Returns whether two factor authentication is enabled for the user
+        /// </summary>
+        /// <param name="user"/>
+        /// <returns/>
+        public Task<bool> GetTwoFactorEnabledAsync(TUser user)
+        {
+            return Task.FromResult(user.IsTwoFactorAuthEnabled.HasValue && user.IsTwoFactorAuthEnabled.Value);
         }
     }
 }

@@ -41,7 +41,7 @@
 
             return this.graphClient.Cypher
                .Match("(x:" + this.nodeType + ")")
-               .Where($"x.Id = '{id}'")
+               .Where($"x.id = '{id}'")
                .Delete("x")
                .ExecuteWithoutResultsAsync();
         }
@@ -55,7 +55,7 @@
 
             return this.graphClient.Cypher
                     .Match("(x:" + this.nodeType + ")")
-                    .Where($"x.Id = '{id}'")
+                    .Where($"x.id = '{id}'")
                     .Return(x => x.As<TNode>())
                     .ResultsAsync;
         }

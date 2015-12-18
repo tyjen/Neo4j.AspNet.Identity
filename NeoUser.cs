@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using Microsoft.AspNet.Identity;
+    using Newtonsoft.Json;
 
     /// <summary>
     /// User object for ASP.NET identity.
@@ -34,62 +35,79 @@
         /// <summary>
         /// Gets the user's claims.
         /// </summary>
+        [JsonProperty("claims")]
         public virtual List<NeoUserClaim> Claims { get; private set; }
 
         /// <summary>
         /// Unique key for the user.
         /// </summary>
+        [JsonProperty("id")]
         public virtual string Id { get; set; }
 
         /// <summary>
         /// Gets the user's login info.
         /// </summary>
+        [JsonProperty("logins")]
         public virtual List<UserLoginInfo> Logins { get; private set; }
 
         /// <summary>
         /// Gets or sets the password hash.
         /// </summary>
+        [JsonProperty("passwordhash")]
         public virtual string PasswordHash { get; set; }
 
         /// <summary>
         /// Gets the roles the user belongs to.
         /// </summary>
+        [JsonProperty("roles")]
         public virtual List<string> Roles { get; private set; }
 
         /// <summary>
         /// Gets or sets the security stamp.
         /// </summary>
+        [JsonProperty("securitystamp")]
         public virtual string SecurityStamp { get; set; }
 
         /// <summary>
         /// Gets or sets the name of the user.
         /// </summary>
+        [JsonProperty("username")]
         public virtual string UserName { get; set; }
 
         /// <summary>
         /// Gets or sets the user's email.
         /// </summary>
+        [JsonProperty("email")]
         public virtual string Email { get; set; }
 
         /// <summary>
         /// Gets or sets the user's phone.
         /// </summary>
-        public virtual string Phone { get; set; }
+        [JsonProperty("phonenumber")]
+        public virtual string PhoneNumber { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether this user's phone number is confirmed.
         /// </summary>
-        /// <value>
-        /// <c>true</c> if phone confirmed; otherwise, <c>false</c>.
-        /// </value>
+        [JsonProperty("phoneconfirmed")]
         public virtual bool IsPhoneConfirmed { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether this user's email is confirmed.
         /// </summary>
-        /// <value>
-        /// <c>true</c> if email confirmed; otherwise, <c>false</c>.
-        /// </value>
+        [JsonProperty("emailconfirmed")]
         public virtual bool IsEmailConfirmed { get; set; }
+
+        [JsonProperty("lockoutenddate", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public virtual DateTimeOffset? LockoutEndDate { get; set; }
+
+        [JsonProperty("failedlogins", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public virtual int? LoginAttempts { get; set; }
+
+        [JsonProperty("lockoutenabled", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public virtual bool? IsLockoutEnabled { get; set; }
+
+        [JsonProperty("usetwofactorauth", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public virtual bool? IsTwoFactorAuthEnabled { get; set; }
     }
 }
