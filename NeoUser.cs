@@ -15,9 +15,7 @@
         /// </summary>
         public NeoUser()
         {
-            this.Claims = new List<NeoUserClaim>();
             this.Roles = new List<string>();
-            this.Logins = new List<UserLoginInfo>();
         }
 
         /// <summary>
@@ -33,22 +31,10 @@
         }
 
         /// <summary>
-        /// Gets the user's claims.
-        /// </summary>
-        [JsonProperty("claims")]
-        public virtual List<NeoUserClaim> Claims { get; private set; }
-
-        /// <summary>
         /// Unique key for the user.
         /// </summary>
         [JsonProperty("id")]
         public virtual string Id { get; set; }
-
-        /// <summary>
-        /// Gets the user's login info.
-        /// </summary>
-        [JsonProperty("logins")]
-        public virtual List<UserLoginInfo> Logins { get; private set; }
 
         /// <summary>
         /// Gets or sets the password hash.
