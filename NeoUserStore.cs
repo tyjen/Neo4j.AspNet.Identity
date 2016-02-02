@@ -1,4 +1,4 @@
-﻿namespace Neo4j.AspNet.Identity
+namespace Neo4j.AspNet.Identity
 {
     using System;
     using System.Collections.Generic;
@@ -299,7 +299,7 @@
             IEnumerable<TUser> results =
                 await this.graphClient.Cypher
                     .Match(NeoUserStore<TUser>.UserNodeMatch)
-                    .Where($"Logins.LoginProvider = '{loginProvider}', Logins.ProviderKey = '{providerKey}'")
+                    .Where((TUser user) => user.Logins.Any(l => l.LoginProvider == loginProvider && l.ProviderKey == providerKey))
                     .Return(u => u.As<TUser>())
                     .ResultsAsync;
 
@@ -333,7 +333,7 @@
             IEnumerable<TUser> results =
              await this.graphClient.Cypher
                  .Match(NeoUserStore<TUser>.UserNodeMatch)
-                 .Where($"Claims.ClaimType= '{claim.Type}', Claims.ClaimValue = '{claim.Value}'")
+                 .Where((TUser user) => user.Claims.Any(c => c.ClaimType == claim.Type && c.ClaimValue == claim.Value))
                  .Return(u => u.As<TUser>())
                  .ResultsAsync;
 
