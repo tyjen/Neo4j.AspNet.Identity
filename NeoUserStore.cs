@@ -1,4 +1,4 @@
-﻿namespace Neo4j.AspNet.Identity
+namespace Neo4j.AspNet.Identity
 {
     using System;
     using System.Collections.Generic;
@@ -184,6 +184,7 @@
         public Task<string> GetSecurityStampAsync(TUser user)
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
+                    .Where((TUser user) => user.Logins.Any(l => l.LoginProvider == loginProvider && l.ProviderKey == providerKey))
 
             return Task.FromResult(user.SecurityStamp);
         }
@@ -200,6 +201,7 @@
         public Task<bool> IsInRoleAsync(TUser user, string role)
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
+                 .Where((TUser user) => user.Claims.Any(c => c.ClaimType == claim.Type && c.ClaimValue == claim.Value))
 
             return Task.FromResult(user.Roles.Contains(role, StringComparer.InvariantCultureIgnoreCase));
         }
