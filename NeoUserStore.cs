@@ -127,11 +127,10 @@
         /// <inheritdoc />
         public async Task<TUser> FindAsync(UserLoginInfo login)
         {
-            IEnumerable<TUser> results =
-                await
-                this.graphClient.Cypher
-                    .Match(NeoUserStore<TUser>.UserNodeMatch)
-                    .Where($"u.logins.LoginProvider = '{login.LoginProvider}', u.logins.ProviderKey = '{login.ProviderKey}'")
+            IEnumerable<TUser> results = await this.graphClient.Cypher
+                    .OptionalMatch($"{NeoUserStore<TUser>.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-(l:login)")
+                    .Where((NeoLoginInfo l) => l.Provider == login.LoginProvider)
+                    .AndWhere((NeoLoginInfo l) => l.Key == login.ProviderKey)
                     .Return(u => u.As<TUser>())
                     .ResultsAsync;
 
@@ -160,7 +159,7 @@
             if (user == null) throw new ArgumentNullException(nameof(user));
 
             IEnumerable<NeoUserClaim> claims = await this.graphClient.Cypher
-                .OptionalMatch($"(u:{NeoUserStore<TUser>.UserNodeLabel})-[{NeoUserClaim.RelationHasClaim}]-(c:claim)")
+                .OptionalMatch($"{NeoUserStore<TUser>.UserNodeMatch}-[{NeoUserClaim.RelationHasClaim}]-(c:claim)")
                 .Where((NeoUser u) => u.Id == user.Id)
                 .Return(c => c.As<NeoUserClaim>())
                 .ResultsAsync;
