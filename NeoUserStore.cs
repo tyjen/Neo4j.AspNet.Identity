@@ -17,16 +17,6 @@ namespace Neo4j.AspNet.Identity
         where TUser : NeoUser
     {
         /// <summary>
-        /// The AspNetUsers node label.
-        /// </summary>
-        private const string UserNodeLabel = "user";
-
-        /// <summary>
-        /// The cypher query to match a user node.
-        /// </summary>
-        private const string UserNodeMatch = "(u:" + NeoUserStore<TUser>.UserNodeLabel + ")";
-
-        /// <summary>
         /// The graph client used to talk to Neo4j.
         /// </summary>
         private readonly IGraphClient graphClient;
@@ -45,7 +35,7 @@ namespace Neo4j.AspNet.Identity
             if (neo4JClient == null) throw new ArgumentNullException(nameof(neo4JClient));
 
             this.graphClient = neo4JClient;
-            this.neoHelper = new Neo4jHelper(this.graphClient, NeoUserStore<TUser>.UserNodeLabel);
+            this.neoHelper = new Neo4jHelper(this.graphClient, NeoUser.UserNodeLabel);
         }
 
         /// <inheritdoc />
@@ -53,10 +43,12 @@ namespace Neo4j.AspNet.Identity
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
-            if (!user.Claims.Any(x => x.ClaimType == claim.Type && x.ClaimValue == claim.Value))
-            {
-                user.Claims.Add(new NeoUserClaim { ClaimType = claim.Type, ClaimValue = claim.Value });
-            }
+            this.graphClient.Cypher
+                .Match(NeoUser.UserNodeMatch)
+                .Where((NeoUser u) => u.Id == user.Id)
+                .Create("u-[:" + NeoUserClaim.RelationHasClaim + "]->(c:claim {newClaim})")
+                .WithParam("newClaim", new NeoUserClaim(claim))
+                .ExecuteWithoutResults();
 
             return Task.FromResult(0);
         }
@@ -66,7 +58,12 @@ namespace Neo4j.AspNet.Identity
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
-            if (!user.Logins.Any(x => x.LoginProvider == login.LoginProvider && x.ProviderKey == login.ProviderKey)) user.Logins.Add(login);
+            this.graphClient.Cypher
+                .Match(NeoUser.UserNodeMatch)
+                .Where((NeoUser u) => u.Id == user.Id)
+                .Create("u-[:" + NeoLoginInfo.RelationHasLogin + "]->(l:login {newLogin})")
+                .WithParam("newLogin", new NeoLoginInfo(login))
+                .ExecuteWithoutResults();
 
             return Task.FromResult(true);
         }
@@ -94,7 +91,7 @@ namespace Neo4j.AspNet.Identity
 
             return
                 this.graphClient.Cypher
-                    .Merge("(user:" + NeoUserStore<TUser>.UserNodeLabel + " { Id: {id} })")
+                    .Merge("(user:" + NeoUser.UserNodeLabel + " { Id: {id} })")
                     .OnCreate()
                     .Set("user = {newUser}")
                     .WithParams(new { id = user.Id, newUser = user })
@@ -120,11 +117,10 @@ namespace Neo4j.AspNet.Identity
         /// <inheritdoc />
         public async Task<TUser> FindAsync(UserLoginInfo login)
         {
-            IEnumerable<TUser> results =
-                await
-                this.graphClient.Cypher
-                    .Match(NeoUserStore<TUser>.UserNodeMatch)
-                    .Where($"u.logins.LoginProvider = '{login.LoginProvider}', u.logins.ProviderKey = '{login.ProviderKey}'")
+            IEnumerable<TUser> results = await this.graphClient.Cypher
+                    .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-{NeoLoginInfo.LoginNodeMatch}")
+                    .Where((NeoLoginInfo l) => l.Provider == login.LoginProvider)
+                    .AndWhere((NeoLoginInfo l) => l.Key == login.ProviderKey)
                     .Return(u => u.As<TUser>())
                     .ResultsAsync;
 
@@ -148,20 +144,31 @@ namespace Neo4j.AspNet.Identity
         }
 
         /// <inheritdoc />
-        public Task<IList<Claim>> GetClaimsAsync(TUser user)
+        public async Task<IList<Claim>> GetClaimsAsync(TUser user)
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
-            IList<Claim> result = user.Claims.Select(c => new Claim(c.ClaimType, c.ClaimValue)).ToList();
-            return Task.FromResult(result);
+            IEnumerable<NeoUserClaim> claims = await this.graphClient.Cypher
+                .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoUserClaim.RelationHasClaim}]-{NeoUserClaim.ClaimNodeMatch}")
+                .Where((NeoUser u) => u.Id == user.Id)
+                .Return(c => c.As<NeoUserClaim>())
+                .ResultsAsync;
+
+            return claims?.Select(c => c.ToClaim()).ToList();
         }
 
         /// <inheritdoc />
-        public Task<IList<UserLoginInfo>> GetLoginsAsync(TUser user)
+        public async Task<IList<UserLoginInfo>> GetLoginsAsync(TUser user)
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
-            return Task.FromResult(user.Logins.ToIList());
+            IEnumerable<NeoLoginInfo> logins = await this.graphClient.Cypher
+                .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-{NeoLoginInfo.LoginNodeMatch}")
+                .Where((NeoUser u) => u.Id == user.Id)
+                .Return(l => l.As<NeoLoginInfo>())
+                .ResultsAsync;
+
+            return logins?.Select(l => l.ToLoginInfo()).ToList();
         }
 
         /// <inheritdoc />
@@ -211,8 +218,13 @@ namespace Neo4j.AspNet.Identity
         {
             if (claim == null) throw new ArgumentNullException(nameof(claim));
 
-            user.Claims.RemoveAll(x => x.ClaimType == claim.Type && x.ClaimValue == claim.Value);
-            return Task.FromResult(0);
+            return this.graphClient.Cypher
+                .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoUserClaim.RelationHasClaim}]-{NeoUserClaim.ClaimNodeMatch}")
+                .Where((NeoUser u) => u.Id == user.Id)
+                .AndWhere((NeoUserClaim c) => c.ClaimType == claim.Type)
+                .AndWhere((NeoUserClaim c) => c.ClaimValue == claim.Value)
+                .DetachDelete("c")
+                .ExecuteWithoutResultsAsync();
         }
 
         /// <inheritdoc />
@@ -230,9 +242,13 @@ namespace Neo4j.AspNet.Identity
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
-            user.Logins.RemoveAll(x => x.LoginProvider == login.LoginProvider && x.ProviderKey == login.ProviderKey);
-
-            return Task.FromResult(0);
+            return this.graphClient.Cypher
+               .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-{NeoLoginInfo.LoginNodeMatch}")
+               .Where((NeoUser u) => u.Id == user.Id)
+               .AndWhere((NeoLoginInfo l) => l.Provider == login.LoginProvider)
+               .AndWhere((NeoLoginInfo l) => l.Key == login.ProviderKey)
+               .DetachDelete("l")
+               .ExecuteWithoutResultsAsync();
         }
 
         /// <inheritdoc />
@@ -259,7 +275,7 @@ namespace Neo4j.AspNet.Identity
             if (user == null) throw new ArgumentNullException(nameof(user));
 
             this.graphClient.Cypher
-                .Match(NeoUserStore<TUser>.UserNodeMatch)
+                .Match(NeoUser.UserNodeMatch)
                 .Where((TUser u) => u.Id == user.Id)
                 .Set("u = {updatedUser}")
                 .WithParam("updatedUser", user)
