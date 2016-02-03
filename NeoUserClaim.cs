@@ -9,7 +9,20 @@
     /// </summary>
     public class NeoUserClaim
     {
+        /// <summary>
+        /// The name of the relationship for a user who owns a claim.
+        /// </summary>
         public const string RelationHasClaim = "HAS_CLAIM";
+
+        /// <summary>
+        /// The claim node label.
+        /// </summary>
+        public const string ClaimNodeLabel = "claim";
+
+        /// <summary>
+        /// The claim node cypher match clause.
+        /// </summary>
+        internal const string ClaimNodeMatch = "(c:" + NeoUserClaim.ClaimNodeLabel + ")";
 
         /// <summary>
         /// Initializes a new instance of the <see cref="NeoUserClaim"/> class.
@@ -45,6 +58,9 @@
         [JsonProperty("id")]
         public virtual string Id { get; set; }
 
+        /// <summary>
+        /// Converts this <see cref="NeoUserClaim"/> to a <see cref="Claim"/>.
+        /// </summary>
         public Claim ToClaim()
         {
             return new Claim(this.ClaimType, this.ClaimValue);

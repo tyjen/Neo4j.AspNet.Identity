@@ -17,16 +17,6 @@
         where TUser : NeoUser
     {
         /// <summary>
-        /// The AspNetUsers node label.
-        /// </summary>
-        private const string UserNodeLabel = "user";
-
-        /// <summary>
-        /// The cypher query to match a user node.
-        /// </summary>
-        private const string UserNodeMatch = "(u:" + NeoUserStore<TUser>.UserNodeLabel + ")";
-
-        /// <summary>
         /// The graph client used to talk to Neo4j.
         /// </summary>
         private readonly IGraphClient graphClient;
@@ -45,7 +35,7 @@
             if (neo4JClient == null) throw new ArgumentNullException(nameof(neo4JClient));
 
             this.graphClient = neo4JClient;
-            this.neoHelper = new Neo4jHelper(this.graphClient, NeoUserStore<TUser>.UserNodeLabel);
+            this.neoHelper = new Neo4jHelper(this.graphClient, NeoUser.UserNodeLabel);
         }
 
         /// <inheritdoc />
@@ -54,7 +44,7 @@
             if (user == null) throw new ArgumentNullException(nameof(user));
 
             this.graphClient.Cypher
-                .Match(NeoUserStore<TUser>.UserNodeMatch)
+                .Match(NeoUser.UserNodeMatch)
                 .Where((NeoUser u) => u.Id == user.Id)
                 .Create("u-[:" + NeoUserClaim.RelationHasClaim + "]->(c:claim {newClaim})")
                 .WithParam("newClaim", new NeoUserClaim(claim))
@@ -69,7 +59,7 @@
             if (user == null) throw new ArgumentNullException(nameof(user));
 
             this.graphClient.Cypher
-                .Match(NeoUserStore<TUser>.UserNodeMatch)
+                .Match(NeoUser.UserNodeMatch)
                 .Where((NeoUser u) => u.Id == user.Id)
                 .Create("u-[:" + NeoLoginInfo.RelationHasLogin + "]->(l:login {newLogin})")
                 .WithParam("newLogin", new NeoLoginInfo(login))
@@ -101,7 +91,7 @@
 
             return
                 this.graphClient.Cypher
-                    .Merge("(user:" + NeoUserStore<TUser>.UserNodeLabel + " { Id: {id} })")
+                    .Merge("(user:" + NeoUser.UserNodeLabel + " { Id: {id} })")
                     .OnCreate()
                     .Set("user = {newUser}")
                     .WithParams(new { id = user.Id, newUser = user })
@@ -128,7 +118,7 @@
         public async Task<TUser> FindAsync(UserLoginInfo login)
         {
             IEnumerable<TUser> results = await this.graphClient.Cypher
-                    .OptionalMatch($"{NeoUserStore<TUser>.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-(l:login)")
+                    .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-{NeoLoginInfo.LoginNodeMatch}")
                     .Where((NeoLoginInfo l) => l.Provider == login.LoginProvider)
                     .AndWhere((NeoLoginInfo l) => l.Key == login.ProviderKey)
                     .Return(u => u.As<TUser>())
@@ -159,7 +149,7 @@
             if (user == null) throw new ArgumentNullException(nameof(user));
 
             IEnumerable<NeoUserClaim> claims = await this.graphClient.Cypher
-                .OptionalMatch($"{NeoUserStore<TUser>.UserNodeMatch}-[{NeoUserClaim.RelationHasClaim}]-(c:claim)")
+                .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoUserClaim.RelationHasClaim}]-{NeoUserClaim.ClaimNodeMatch}")
                 .Where((NeoUser u) => u.Id == user.Id)
                 .Return(c => c.As<NeoUserClaim>())
                 .ResultsAsync;
@@ -173,7 +163,7 @@
             if (user == null) throw new ArgumentNullException(nameof(user));
 
             IEnumerable<NeoLoginInfo> logins = await this.graphClient.Cypher
-                .OptionalMatch($"(u:{NeoUserStore<TUser>.UserNodeLabel})-[{NeoLoginInfo.RelationHasLogin}]-(l:login)")
+                .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-{NeoLoginInfo.LoginNodeMatch}")
                 .Where((NeoUser u) => u.Id == user.Id)
                 .Return(l => l.As<NeoLoginInfo>())
                 .ResultsAsync;
@@ -227,7 +217,7 @@
             if (claim == null) throw new ArgumentNullException(nameof(claim));
 
             return this.graphClient.Cypher
-                .OptionalMatch($"{NeoUserStore<TUser>.UserNodeMatch}-[{NeoUserClaim.RelationHasClaim}]-(c:claim)")
+                .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoUserClaim.RelationHasClaim}]-{NeoUserClaim.ClaimNodeMatch}")
                 .Where((NeoUser u) => u.Id == user.Id)
                 .AndWhere((NeoUserClaim c) => c.ClaimType == claim.Type)
                 .AndWhere((NeoUserClaim c) => c.ClaimValue == claim.Value)
@@ -251,7 +241,7 @@
             if (user == null) throw new ArgumentNullException(nameof(user));
 
             return this.graphClient.Cypher
-               .OptionalMatch($"{NeoUserStore<TUser>.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-(l:login)")
+               .OptionalMatch($"{NeoUser.UserNodeMatch}-[{NeoLoginInfo.RelationHasLogin}]-{NeoLoginInfo.LoginNodeMatch}")
                .Where((NeoUser u) => u.Id == user.Id)
                .AndWhere((NeoLoginInfo l) => l.Provider == login.LoginProvider)
                .AndWhere((NeoLoginInfo l) => l.Key == login.ProviderKey)
@@ -283,7 +273,7 @@
             if (user == null) throw new ArgumentNullException(nameof(user));
 
             this.graphClient.Cypher
-                .Match(NeoUserStore<TUser>.UserNodeMatch)
+                .Match(NeoUser.UserNodeMatch)
                 .Where((TUser u) => u.Id == user.Id)
                 .Set("u = {updatedUser}")
                 .WithParam("updatedUser", user)

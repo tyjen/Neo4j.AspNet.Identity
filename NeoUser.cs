@@ -11,6 +11,16 @@
     public class NeoUser : IUser
     {
         /// <summary>
+        /// The AspNet ssers node label.
+        /// </summary>
+        public const string UserNodeLabel = "user";
+
+        /// <summary>
+        /// The cypher query to match a user node.
+        /// </summary>
+        public const string UserNodeMatch = "(u:" + NeoUser.UserNodeLabel + ")";
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="NeoUser"/> class.
         /// </summary>
         public NeoUser()
@@ -84,15 +94,27 @@
         [JsonProperty("emailconfirmed")]
         public virtual bool IsEmailConfirmed { get; set; }
 
+        /// <summary>
+        /// Gets or sets the lockout end date.
+        /// </summary>
         [JsonProperty("lockoutenddate", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public virtual DateTimeOffset? LockoutEndDate { get; set; }
 
+        /// <summary>
+        /// Gets or sets the login attempt count.
+        /// </summary>
         [JsonProperty("failedlogins", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public virtual int? LoginAttempts { get; set; }
 
+        /// <summary>
+        /// Gets or sets the flag indicating if lockout is enabled.
+        /// </summary>
         [JsonProperty("lockoutenabled", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public virtual bool? IsLockoutEnabled { get; set; }
 
+        /// <summary>
+        /// Gets or sets the flag indicating if two factor authentication is enabled.
+        /// </summary>
         [JsonProperty("usetwofactorauth", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public virtual bool? IsTwoFactorAuthEnabled { get; set; }
     }
